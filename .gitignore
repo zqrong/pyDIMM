@@ -1,0 +1,13 @@
+#Dynamic libraries
+*.so
+
+#pyCache
+__pycache__
+
+
+#debug
+debug/
+
+#dist
+dist/
+pyDIMM.egg-info/

@@ -174,11 +174,13 @@ void EM(bool save_log, FILE *logFilePointer, int model_size, int n_cells, int n_
         pie[k] = new_pie[k];
     }
     free(new_pie);
+    double alpha_sum = 0;
     for (int i = 0; i < n_genes; ++i)
     {
         for (int k = 0; k < model_size; ++k)
         {
             alpha[i][k] = new_alpha[i][k];
+            alpha_sum += alpha[i][k];
         }
         free(new_alpha[i]);
     }
@@ -186,7 +188,7 @@ void EM(bool save_log, FILE *logFilePointer, int model_size, int n_cells, int n_
     free(sum_alpha);
     free(T);
     //Print to log file.
-    if (save_log) fprintf(logFilePointer, "%d,%lf,%lf,%lf\n", max_iter, pie_tol, loglik_tol, alpha_tol);
+    if (save_log) fprintf(logFilePointer, "%d,%lf,%lf,%lf,%lf,%lf\n", max_iter, pie_tol, loglik_tol, alpha_tol, loglik, alpha_sum);
     //Judge whether to recur EM.
     if ((max_iter > 1) && (pie_tol >= max_pie_tol) && (loglik_tol >= max_loglik_tol) && (alpha_tol >= max_alpha_tol))
     {
@@ -230,7 +232,7 @@ void EM_with_1dArr(int model_size, int n_cells, int n_genes, double *ob_data_1d,
     if (save_log)
     {
         logFilePointer = fopen("pyDIMM.log", "w");
-        fprintf(logFilePointer, "remain_iter,pie_tol,loglik_tol,alpha_tol\n");
+        fprintf(logFilePointer, "remain_iter,pie_delta,loglik_delta,alpha_l2norm_delta,loglik,alpha_sum\n");
     }
     else
     {

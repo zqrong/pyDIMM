@@ -5,7 +5,7 @@ with open("README.md", "r") as f:
 
 setuptools.setup(
     name="pyDIMM",
-    version="0.0.1",
+    version="0.0.2",
     author="Ziqi Rong",
     author_email="rongziqi@sjtu.edu.cn",
     description="A Python Dirichlet Multinomial Mixture Model",

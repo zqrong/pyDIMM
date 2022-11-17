@@ -1,2 +1,0 @@
-prune *.so
-graft clibs

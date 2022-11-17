@@ -1,9 +1,5 @@
-#Dynamic libraries
-*.so
-
 #pyCache
 __pycache__
-
 
 #debug
 debug/

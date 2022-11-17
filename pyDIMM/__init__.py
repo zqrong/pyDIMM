@@ -1,9 +1,3 @@
-import subprocess
-import os
+from ._dirichlet_multinomial_mixture import DirichletMultinomialMixture
 
-name = 'pyDIMM'
-
-cwd=os.path.dirname(os.path.realpath(__file__))
-subprocess.Popen("make", cwd=os.path.join(cwd, 'clibs'))
-
-from .class_DIMM import DIMM
+__all__ = ["DirichletMultinomialMixture"]

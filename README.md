@@ -23,7 +23,8 @@ dimm = pyDIMM.DirichletMultinomialMixture(
     n_components=3,
     tol=1e-3,
     max_iter=100,
-    verbose=2
+    verbose=2,
+    pytorch=0
 ).fit(X)
 
 print('Alphas:', dimm.alphas)

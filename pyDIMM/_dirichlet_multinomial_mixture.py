@@ -1,11 +1,11 @@
 '''Dirichlet Multinomial Mixture Model'''
 
-# Author: Ziqi Rong <ziqirong01@gmail.com>
-# License: 
+# Author: Ziqi Rong <ziqirong@umich.edu>
+# License: BSD 3 clause
 
 import numpy as np
-
-from scipy.special import gammaln
+import torch
+import scipy.special
 
 from sklearn.mixture._base import BaseMixture
 
@@ -49,22 +49,119 @@ def _initialize_alpha(X, resp):
         alphas[k] = alphas[k] + 1e-4
     return alphas
 
-def _estimate_log_dirichlet_multinomial_prob(X, alphas):
+def _estimate_log_dirichlet_multinomial_prob(X, alphas, pytorch):
     n_samples, n_features = X.shape
     n_components, _ = alphas.shape
-    term1 = gammaln(X + alphas[:,np.newaxis]).sum(axis=2) - gammaln(alphas[:,np.newaxis]).sum(axis=2)
-    term2 = - gammaln(X.sum(axis=1)+alphas[:,np.newaxis].sum(axis=2)) + gammaln(alphas.sum(axis=1))[:,np.newaxis]
-    log_prob = (term1+term2).T
+    if pytorch == 0:
+        term1 = scipy.special.gammaln(X + alphas[:,np.newaxis]).sum(axis=2) - scipy.special.gammaln(alphas[:,np.newaxis]).sum(axis=2)
+        term2 = - scipy.special.gammaln(X.sum(axis=1)+alphas[:,np.newaxis].sum(axis=2)) + scipy.special.gammaln(alphas.sum(axis=1))[:,np.newaxis]
+        log_prob = (term1+term2).T
+    else:
+        if pytorch == 1:
+            if isinstance(X, np.ndarray):
+                X = torch.from_numpy(X)
+            if isinstance(alphas, np.ndarray):
+                alphas = torch.from_numpy(alphas)
+        elif pytorch == 2:
+            if isinstance(X, np.ndarray):
+                X = torch.from_numpy(X).to('cuda')
+            if isinstance(alphas, np.ndarray):
+                alphas = torch.from_numpy(alphas).to('cuda')
+        term1 = torch.special.gammaln(X + alphas[:,None]).sum(axis=2) - torch.special.gammaln(alphas[:,None]).sum(axis=2)
+        term2 = - torch.special.gammaln(X.sum(axis=1)+alphas[:,None].sum(axis=2)) + torch.special.gammaln(alphas.sum(axis=1))[:,None]
+        log_prob = (term1+term2).T
+        log_prob = log_prob.cpu().numpy()
     return log_prob
 
-def _estimate_dirichlet_multinomial_alphas(X, resp, alphas, reg_alpha):
-    T = X.sum(axis=1)
-    term1 = ((X / (X - 1 + alphas[:,np.newaxis])) * np.transpose(resp.T[:,np.newaxis], axes=(0,2,1))).sum(axis=1)
-    term2 = ((T / (T - 1 + alphas.sum(axis=1)[:,np.newaxis])) * resp.T).sum(axis=1)
-    alphas = alphas * (term1/term2[:,np.newaxis]) + reg_alpha
+def _estimate_dirichlet_multinomial_alphas(X, resp, alphas, reg_alpha, pytorch):
+    if pytorch == 0:
+        T = X.sum(axis=1)
+        term1 = ((X / (X - 1 + alphas[:,np.newaxis])) * np.transpose(resp.T[:,np.newaxis], axes=(0,2,1))).sum(axis=1)
+        term2 = ((T / (T - 1 + alphas.sum(axis=1)[:,np.newaxis])) * resp.T).sum(axis=1)
+        alphas = alphas * (term1/term2[:,np.newaxis]) + reg_alpha
+    else:
+        if pytorch == 1:
+            if isinstance(X, np.ndarray):
+                X = torch.from_numpy(X)
+            if isinstance(resp, np.ndarray):
+                resp = torch.from_numpy(resp)
+            if isinstance(alphas, np.ndarray):
+                alphas = torch.from_numpy(alphas)
+        elif pytorch == 2:
+            if isinstance(X, np.ndarray):
+                X = torch.from_numpy(X).to('cuda')
+            if isinstance(resp, np.ndarray):
+                resp = torch.from_numpy(resp).to('cuda')
+            if isinstance(alphas, np.ndarray):
+                alphas = torch.from_numpy(alphas).to('cuda')
+        T = X.sum(axis=1)
+        term1 = ((X / (X - 1 + alphas[:,None])) * torch.transpose(resp.T[:,None], 1, 2)).sum(axis=1)
+        term2 = ((T / (T - 1 + alphas.sum(axis=1)[:,None])) * resp.T).sum(axis=1)
+        alphas = alphas * (term1/term2[:,None]) + reg_alpha
+        alphas = alphas.cpu().numpy()
     return alphas
 
 class DirichletMultinomialMixture(BaseMixture):
+    """Dirichlet-multinomial Mixture.
+
+    Parameters
+    ----------
+    n_components : int, default=1.
+        The number of mixture components.
+    
+    tol : float, default=1e-3.
+        The convergence threshold. EM iterations will stop when the
+        lower bound average gain is below this threshold.
+    
+    reg_covar : float, default=1e-6.
+    
+    max_iter : int, default=10.
+        The number of EM iterations to perform.
+    
+    n_init : int, default=1.
+    
+    init_params : str, default='kmeans'.
+        The method used to initialize the weights, the means and the
+        precisions.
+        String must be one of:
+
+        - 'kmeans' : responsibilities are initialized using kmeans.
+        - 'k-means++' : use the k-means++ method to initialize.
+        - 'random' : responsibilities are initialized randomly.
+        - 'random_from_data' : initial means are randomly selected data points.
+    
+    random_state : int, default=None.
+    
+    warm_start : bool, default=False.
+    
+    verbose : int, default=0.
+        Enable verbose output. If 1 then it prints the current
+        initialization and each iteration step. If greater than 1 then
+        it prints also the log probability and the time needed
+        for each step.
+    
+    verbose_interval : int, default=10.
+        Number of iteration done before the next print.
+    
+    reg_alpha : float, default=1e-10.
+    
+    pytorch : int, default=0.
+        Whether to use PyTorch in EM iterations.
+        Must be one of:
+
+        - 0 : Do not use PyTorch (Use NumPy as default).
+        - 1 : Use PyTorch tensor on cpu.
+        - 2 : Use Pytorch tensor on cuda.
+
+    Attributes
+    ----------
+    weights : array-like of shape (n_components,)
+        The weights of each mixture components.
+
+    alphas : array-like of shape (n_components, n_features)
+        The alphas of each mixture component.
+
+    """
     def __init__(
         self,
         n_components=1,
@@ -77,8 +174,13 @@ class DirichletMultinomialMixture(BaseMixture):
         warm_start=False,
         verbose=0,
         verbose_interval=10,
-        reg_alpha = 1e-10
+        reg_alpha = 1e-10,
+        pytorch = 0
     ):
+        if pytorch not in [0,1,2]:
+            raise ValueError('Invalid argument \'pytorch\'. It could only be 0, 1 or 2.')
+        if (pytorch == 2) and (not torch.cuda.is_available()):
+            raise RuntimeError('Cuda not available.')
         super().__init__(
             n_components=n_components,
             tol=tol,
@@ -92,6 +194,7 @@ class DirichletMultinomialMixture(BaseMixture):
             verbose_interval=verbose_interval,
         )
         self.reg_alpha = reg_alpha
+        self.pytorch = pytorch
     
     def _check_parameters(self, X):
         pass
@@ -103,7 +206,7 @@ class DirichletMultinomialMixture(BaseMixture):
 
     def _estimate_log_prob(self, X):
         return _estimate_log_dirichlet_multinomial_prob(
-            X, self.alphas
+            X, self.alphas, self.pytorch
         )
     
     def _estimate_log_weights(self):
@@ -114,7 +217,7 @@ class DirichletMultinomialMixture(BaseMixture):
         n_components, _ = log_resp.shape
         resp = np.exp(log_resp)
         self.weights = resp.sum(axis=0)/resp.sum()
-        self.alphas = _estimate_dirichlet_multinomial_alphas(X, resp, self.alphas, self.reg_alpha)
+        self.alphas = _estimate_dirichlet_multinomial_alphas(X, resp, self.alphas, self.reg_alpha, self.pytorch)
 
     def _compute_lower_bound(self, _, log_prob_norm):
         return log_prob_norm
